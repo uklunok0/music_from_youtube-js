@@ -1,31 +1,60 @@
-const ytdl = require("node-ytdl-core");
+const { spawn } = require("child_process");
+const path = require("path");
 
-const getVideoInfo = async (link) => {
-  try {
-    const info = await ytdl.getInfo(link);
-    // получить заголовок видео
-    const fileTitle = info.player_response.videoDetails.title;
+const ytdlpPath = path.join(__dirname, "..", "yt-dlp.exe");
+const getVideoInfo = (link) => {
+  return new Promise((resolve, reject) => {
+    const args = [link, "--dump-json", "--no-playlist"];
 
-    const lengthFile = info.player_response.videoDetails.lengthSeconds; // длительность в секундах
-    const lengthFileInt = Math.floor(lengthFile / 60); // кол-во минут
-    const lengthFileFloat = lengthFile % 60; // кол-во секунд
+    const ytdlpProcess = spawn(ytdlpPath, args);
 
-    const audioFormat = info.formats.find((format) =>
-      format.mimeType.startsWith("audio/")
-    );
-    // получить объём аудио файла
-    const fileSize = Math.floor(
-      (parseInt(audioFormat.contentLength) / 1024) * 2.5
-    );
-    // получить превью видео
-    const thumbnailUrl =
-      info.player_response.videoDetails.thumbnail.thumbnails[0].url;
-    console.log(fileSize);
-    return [fileSize, thumbnailUrl, lengthFileInt, lengthFileFloat];
-  } catch (error) {
-    console.error(error);
-    return 0;
-  }
+    let stdoutData = "";
+    let stderrData = "";
+
+    ytdlpProcess.stdout.on("data", (data) => {
+      stdoutData += data.toString();
+    });
+
+    ytdlpProcess.stderr.on("data", (data) => {
+      stderrData += data.toString();
+    });
+
+    ytdlpProcess.on("close", (code) => {
+      if (code === 0) {
+        try {
+          const data = JSON.parse(stdoutData);
+
+          const duration = data.duration; // в секундах
+          if (!duration) {
+            resolve(null);
+            return;
+          }
+
+          const minutes = Math.floor(duration / 60);
+          const seconds = duration % 60;
+
+          // Примерный размер в КБ (128kbps ~ 16KB/s)
+          const estimatedSizeKB = Math.floor(32 * duration);
+
+          const thumbnail = data.thumbnail;
+
+          // Возвращаем массив: [размер, картинка, минуты, секунды]
+          resolve([estimatedSizeKB, thumbnail, minutes, seconds]);
+        } catch (e) {
+          console.error("Ошибка парсинга JSON в getVideoInfo:", e);
+          resolve(null);
+        }
+      } else {
+        console.error(`yt-dlp error in getVideoInfo: ${stderrData}`);
+        resolve(null);
+      }
+    });
+
+    ytdlpProcess.on("error", (err) => {
+      console.error("Не удалось запустить yt-dlp в getVideoInfo:", err);
+      resolve(null);
+    });
+  });
 };
 
 module.exports = getVideoInfo;

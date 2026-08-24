@@ -1,40 +1,34 @@
-function validateUrl(data) {
-  try {
-    // ф-ция проверки корректного ввода данных в форму
-    let validate = 0;
-    if (!data) {
-      //res.render("code400.ejs");
-      let responseHTML = "Данные не введены!";
-      return responseHTML;
-    }
-
-    const isUrlValid = /^https?:\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*$/i.test(data); // проверяем, соответствует ли переданный URL стандартам URL
-    if (!isUrlValid) {
-      //res.render("code404.ejs");
-      responseHTML = "Некорректный URL!";
-      return responseHTML;
-    }
-
-    const notYouTubeLink = data.substring(0, 20);
-    const notYouTubeLink0 = data.substring(0, 17);
-    if (
-      notYouTubeLink !== "https://www.youtube." &&
-      notYouTubeLink !== "https://youtube.com/" &&
-      notYouTubeLink !== "https://m.youtube.co" &&
-      notYouTubeLink0 !== "https://youtu.be/"
-    ) {
-      responseHTML = "Это не ссылка YouTube!";
-      return responseHTML;
-    }
-
-    validate++;
-    console.log(validate);
-
-    return validate;
-  } catch (error) {
-    console.log(error);
-    return 0;
+const validateUrl = (data) => {
+  // 1. Проверка на пустоту
+  if (!data || typeof data !== "string" || data.trim() === "") {
+    return "Данные не введены!";
   }
-}
+
+  let url;
+  try {
+    // 2. Попытка распарсить URL. Если ссылка битая, new URL выбросит ошибку
+    url = new URL(data);
+  } catch (e) {
+    return "Некорректный URL!";
+  }
+
+  // 3. Проверка протокола (должен быть http или https)
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return "Поддерживаются только http и https ссылки!";
+  }
+
+  // 4. Проверка домена YouTube
+  // hostname вернет, например, "www.youtube.com", "youtube.com", "m.youtube.com", "youtu.be"
+  const hostname = url.hostname.toLowerCase();
+
+  const isYouTube = hostname.endsWith("youtube.com") || hostname === "youtu.be";
+
+  if (!isYouTube) {
+    return "Это не ссылка YouTube!";
+  }
+
+  // 5. Если всё хорошо, возвращаем 1 (или true)
+  return 1;
+};
 
 module.exports = validateUrl;

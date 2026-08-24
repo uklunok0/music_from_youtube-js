@@ -5,61 +5,78 @@ const resultDiv = document.getElementById("result");
 const resultDivWrap = document.createElement("div");
 const divBtn = form.getElementsByClassName("btn")[0];
 
-const downloadLink = document.querySelector('a[href="/download"]');
+// Элемент для отображения статуса/прогресса
 const statusElement = document.getElementById("status");
 
 async function sendRequestAndUpdateResult(url, data) {
   try {
     showAnimation();
 
-    // Отправка запроса к серверу с данными из формы и получение результата от сервера
+    // Отправка запроса к серверу
     const response = await axios.post(url, data);
-    const resultData = response.data;
+    let resultData = response.data;
 
+    // проверяем тип данных. Сервер может вернуть строку (ошибку/HTML) или JSON (при скачивании)
+    if (typeof resultData === "object" && resultData !== null) {
+      // Если пришел JSON (например, { taskId: "..." }), обрабатываем отдельно или возвращаем
+      return resultData;
+    }
+
+    // Логика для строковых ответов (валидация, инфо о видео)
     const resultDataCut = resultData.substring(0, 8);
+
     if (resultDataCut == "Название") {
       // Создаем элемент плашки
       resultDivWrap.className = "messageWrap";
-      // Добавляем элемент плашки в контейнер
       const container = document.getElementById("result");
+      // Очищаем контейнер перед добавлением нового, если нужно, или добавляем внутрь
+      container.innerHTML = "";
       container.appendChild(resultDivWrap);
       resultDivWrap.innerHTML = resultData;
 
-      //console.log("win2!");
-      nameInput.setAttribute("readonly", true); // запретить редактирование ссылки на видео
+      nameInput.setAttribute("readonly", true);
     } else {
-      // Обновление содержимого элемента div с заданным id с результатом работы функции на сервере
+      // Обновление содержимого div с результатом (ошибки валидации и т.д.)
       resultDiv.innerHTML = resultData;
+      // Очищаем обертку, если она была
+      if (resultDivWrap.parentNode) {
+        resultDivWrap.remove();
+      }
     }
 
     closeAnimation();
+    return null; // Возвращаем null для строковых ответов
   } catch (error) {
     console.error(error);
+    closeAnimation();
+    resultDiv.innerHTML = "Ошибка соединения с сервером";
+    return null;
   }
 }
 
 function checkDivIsNotEmpty() {
-  if (
-    resultDiv &&
-    resultDiv.innerHTML !== "Некорректный URL!" &&
-    resultDiv.innerHTML !== "Данные не введены!" &&
-    resultDiv.innerHTML !== "Это не ссылка YouTube!" &&
-    resultDiv.innerHTML !== "Попробуйте что-нибудь другое ☹" &&
-    resultDiv.innerHTML !== "Файл много весит, скачайте другой ☹"
-  ) {
+  // Проверка, что в resultDiv нет сообщений об ошибках
+  const inner = resultDiv.innerHTML;
+  const isError =
+    inner.includes("Некорректный URL") ||
+    inner.includes("Данные не введены") ||
+    inner.includes("Это не ссылка YouTube") ||
+    inner.includes("Попробуйте что-нибудь другое") ||
+    inner.includes("Файл много весит");
+
+  if (!isError && inner.includes("Название")) {
     console.log("win!");
 
-    const btn = document.createElement("button"); // создать кнопку если ответ от youtube успешный
+    // Удаляем старую кнопку, если есть
+    const oldBtn = document.getElementById("confirmButton");
+    if (oldBtn) oldBtn.remove();
+
+    const btn = document.createElement("button");
     btn.innerHTML = "Скачать";
     btn.id = "confirmButton";
     divBtn.appendChild(btn);
 
-    btn.addEventListener("click", btnSubmit); // вызов ф-ции для запуска скачивания файла
-  } else {
-    //удалить результат по нажатию на него
-    // resultDiv.addEventListener("click", () => {
-    //   resultDiv.innerHTML = "";
-    // });
+    btn.addEventListener("click", btnSubmit);
   }
 }
 
@@ -67,104 +84,150 @@ function checkDivIsNotEmpty() {
 const handleSubmit = async function (e) {
   e.preventDefault();
   resultDiv.innerHTML = "";
-  //resultDiv.remove();
+
+  // Сброс состояния
+  nameInput.removeAttribute("readonly");
+  document.getElementById("submitButton").remove(); // удалить кнопку если запрос отправлен на youtube
+  const oldBtn = document.getElementById("confirmButton");
+  if (oldBtn) oldBtn.remove();
 
   const data = {
     name: nameInput.value,
   };
 
-  const dataCut0 = data.name.substring(0, 20);
-  const dataCut1 = data.name.substring(0, 12);
-  const dataCut2 = data.name.substring(0, 17);
-
-  if (
-    dataCut0 == "https://www.youtube." ||
-    dataCut0 == "https://youtube.com/" ||
-    dataCut0 == "https://m.youtube.co" ||
-    dataCut1 == "www.youtube." ||
-    dataCut2 == "https://youtu.be/"
-  ) {
-    document.getElementById("submitButton").remove(); // удалить кнопку если запрос отправлен на youtube
-  } else {
-    console.log(dataCut0 || dataCut1 || dataCut2);
+  // Простая проверка перед отправкой (дублирует серверную, но для UX полезно)
+  if (!data.name) {
+    resultDiv.innerHTML = "Введите ссылку!";
+    return;
   }
 
-  await sendRequestAndUpdateResult("/", data); // отправить запрос на локальный сервер и вывести результат на страницу
-  await checkDivIsNotEmpty(data); // если url корректный создать кнопку подтвержения
+  // Отправляем запрос на получение информации
+  await sendRequestAndUpdateResult("/", data);
+
+  // Проверяем ответ и создаем кнопку скачивания
+  checkDivIsNotEmpty();
 };
 
 form.addEventListener("submit", handleSubmit);
 
-// Обработчик события клика по созданной кнопке для отправки запроса на youtube
+// Обработчик события клика по созданной кнопке для отправки запроса на скачивание
 const btnSubmit = async function () {
-  console.log("win-0!");
-  document.getElementById("confirmButton").remove();
-  document.getElementById("arrow").style.display = "none";
-  resultDiv.innerHTML = "Дождитесь загрузки файла на сервер!";
+  console.log("Начало скачивания...");
+
+  const confirmBtn = document.getElementById("confirmButton");
+  if (confirmBtn) confirmBtn.remove();
+
+  // Показываем статус
+  resultDiv.innerHTML = "Подготовка файла... Пожалуйста, подождите.";
+  showAnimation();
 
   const data = {
     name: nameInput.value,
   };
 
-  const eventSource = new EventSource("/progress"); // Используем SSE для получения данных о прогрессе загрузки
+  try {
+    // 1. Отправляем запрос на скачивание. Сервер вернет JSON { taskId: "..." }
+    const responseData = await axios.post("/data", data);
+    const taskId = responseData.data.taskId;
 
-  eventSource.onmessage = function (event) {
-    const data = JSON.parse(event.data); // Парсим JSON данные от сервера
-    if (event.data == 1111) {
-      eventSource.close(); // закрыть соединение
-    } else {
-      console.log("Target size:", data);
+    if (!taskId) {
+      throw new Error("Не получен ID задачи");
     }
-  };
 
-  eventSource.onerror = function (error) {
-    console.error("Ошибка SSE:", error);
-  };
+    // 2. Подключаемся к SSE с конкретным ID задачи
+    const eventSource = new EventSource(`/progress/${taskId}`);
 
-  eventSource.onopen = function () {
-    console.log("Подключение к серверу SSE установлено");
-  };
+    eventSource.onmessage = function (event) {
+      try {
+        const taskData = JSON.parse(event.data);
 
-  await sendRequestAndUpdateResult("/data", data);
+        // Обновляем сообщение и прогресс в реальном времени
+        let progressText = "";
+        if (taskData.stage === "downloading") {
+          progressText = `📥 ${taskData.message} ${Math.round(taskData.progress)}%`;
+        } else if (taskData.stage === "converting") {
+          progressText = `⚙️ ${taskData.message} ${Math.round(taskData.progress)}%`;
+        } else if (taskData.stage === "init") {
+          progressText = `🕒 ${taskData.message}`;
+        }
 
-  if (downloadLink) {
-    document.getElementById("arrow").style.display = "";
-    downloadLink.addEventListener("click", function () {});
-    downloadLink.click();
+        resultDiv.innerHTML = progressText;
+
+        if (taskData.status === "finished") {
+          eventSource.close();
+          closeAnimation();
+          resultDiv.innerHTML = "<strong>✅ Готово! Загрузка файла...</strong>";
+
+          // Автоматическое скачивание
+          const link = document.createElement("a");
+          link.href = `/download/${taskId}`;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setTimeout(() => {
+            nameInput.removeAttribute("readonly");
+            resultDiv.innerHTML = "";
+          }, 5000);
+        } else if (taskData.status === "error") {
+          eventSource.close();
+          closeAnimation();
+          resultDiv.innerHTML = "Ошибка при обработке видео.";
+        }
+      } catch (e) {
+        console.error("Ошибка парсинга SSE:", e);
+      }
+    };
+
+    eventSource.onerror = function () {};
+  } catch (error) {
+    console.error(error);
+    closeAnimation();
+    resultDiv.innerHTML = "Ошибка при запуске скачивания.";
   }
 };
 
 // анимация в момент запроса данных
 function showAnimation() {
-  statusElement.className = "loadingio-spinner-ellipsis-29linrtctor";
+  if (statusElement) {
+    statusElement.className = "loadingio-spinner-ellipsis-29linrtctor";
+  }
 }
 function closeAnimation() {
-  statusElement.classList.remove("loadingio-spinner-ellipsis-29linrtctor");
+  if (statusElement) {
+    statusElement.classList.remove("loadingio-spinner-ellipsis-29linrtctor");
+  }
 }
 
-//автовызываемая функция затемнения навигационного бара по скроллингу
+// автовызываемая функция затемнения навигационного бара по скроллингу
 (function () {
   const header = document.getElementsByClassName("header")[0];
-
-  window.onscroll = function () {
-    if (window.pageYOffset > 50) {
-      header.classList.add("header__active");
-    } else {
-      header.classList.remove("header__active");
-    }
-  };
+  if (header) {
+    window.onscroll = function () {
+      if (window.pageYOffset > 50) {
+        header.classList.add("header__active");
+      } else {
+        header.classList.remove("header__active");
+      }
+    };
+  }
 })();
 
-//burger handler
-
+// burger handler
 (function () {
   const burgerItem = document.querySelector(".header__burger");
   const menu = document.querySelector(".header__nav");
   const menuClose = document.querySelector(".header__nav_close");
-  burgerItem.addEventListener("click", () => {
-    menu.classList.add("header__nav_active");
-  });
-  menuClose.addEventListener("click", () => {
-    menu.classList.remove("header__nav_active");
-  });
+
+  if (burgerItem && menu) {
+    burgerItem.addEventListener("click", () => {
+      menu.classList.add("header__nav_active");
+    });
+  }
+  if (menuClose && menu) {
+    menuClose.addEventListener("click", () => {
+      menu.classList.remove("header__nav_active");
+    });
+  }
 })();

@@ -4,16 +4,11 @@ const getFileSize = async (link) => {
   try {
     const info = await ytdl.getInfo(link);
     console.log(info.player_response.videoDetails.title);
-    const audioFormat = info.formats.find((format) =>
-      format.mimeType.startsWith("audio/")
-    );
+    const audioFormat = info.formats.find((format) => format.mimeType.startsWith("audio/"));
     // получить объём аудио
-    const fileSize = Math.floor(
-      (parseInt(audioFormat.contentLength) / 1024) * 2.5
-    );
+    const fileSize = Math.floor((parseInt(audioFormat.contentLength) / 1024) * 2.5);
     // получить превью
-    const thumbnailUrl =
-      info.player_response.videoDetails.thumbnail.thumbnails[0].url;
+    const thumbnailUrl = info.player_response.videoDetails.thumbnail.thumbnails[0].url;
     console.log(thumbnailUrl);
     // const thumbnailFileName = "thumbnail";
     // file = fs.createWriteStream(thumbnailFileName);

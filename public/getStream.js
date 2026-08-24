@@ -1,5 +1,5 @@
 const ffmpeg = require("fluent-ffmpeg");
-const ytdl = require("ytdl-core");
+const ytdl = require("@distube/ytdl-core");
 const readline = require("readline");
 const { response } = require("express");
 
@@ -9,7 +9,7 @@ const getStream = async (link, linkYoutube) => {
   try {
     let stream = await ytdl(link, { quality: "highestaudio" }); // получить видеопоток по ссылке
     ffmpeg.setFfmpegPath(
-      "C:/JS-PROGECTS/mp3_from_youtube/ffmpeg/bin/ffmpeg.exe"
+      "C:/JS-PROGECTS/mp3_from_youtube/ffmpeg/bin/ffmpeg.exe",
     );
 
     function saveStream() {
@@ -18,7 +18,7 @@ const getStream = async (link, linkYoutube) => {
         .audioBitrate(320)
         .save(
           "C:/JS-PROGECTS/mp3_from_youtube/tmp_from_youtube/" +
-            `${linkYoutube}.mp3`
+            `${linkYoutube}.mp3`,
         )
         .on("progress", (p) => {
           readline.cursorTo(process.stdout, 0); // перемещает курсор в начало строки
